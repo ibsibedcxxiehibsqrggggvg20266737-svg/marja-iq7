@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مرجع العراق – آخر أخبار العالم</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', sans-serif; background: #0a0b10; color: #e0e0e0; }
+        .top-bar { background: #1a1c23; padding: 10px 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo { font-size: 1.4rem; font-weight: bold; color: #c9a84c; }
+        .update-info { font-size: 0.8rem; color: #aaa; }
+        .live-dot { color: #4ade80; animation: pulse 1s infinite; }
+        .breaking-news { background: linear-gradient(90deg, #c9a84c, #e0b840); color: #000; padding: 8px 20px; margin: 10px 15px; border-radius: 6px; font-weight: bold; display: none; }
+        .search-box { margin: 10px 15px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .search-box input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #444; background: #1a1c23; color: #fff; min-width: 200px; }
+        .search-box button { background: #c9a84c; border: none; border-radius: 20px; padding: 10px 20px; cursor: pointer; font-weight: bold; }
+        .update-message { text-align: center; color: #4ade80; font-size: 0.8rem; margin: 0 15px 10px; display: none; }
+        .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; padding: 20px; }
+        .news-card { background: #1e1f27; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a35; transition: transform 0.2s; cursor: pointer; }
+        .news-card:hover { transform: translateY(-4px); border-color: #c9a84c; }
+        .card-img { width: 100%; height: 180px; object-fit: cover; background: #222; }
+        .card-body { padding: 15px; }
+        .card-title { font-size: 1rem; font-weight: bold; margin-bottom: 8px; color: #fff; }
+        .card-desc { font-size: 0.8rem; color: #aaa; margin-bottom: 12px; }
+        .card-footer { display: flex; justify-content: space-between; font-size: 0.7rem; color: #777; }
+        .source-badge { background: #c9a84c; color: #000; padding: 3px 10px; border-radius: 4px; font-weight: bold; font-size: 0.7rem; }
+        .loading { text-align: center; padding: 40px; color: #c9a84c; display: none; }
+        footer { text-align: center; padding: 20px; color: #666; font-size: 0.8rem; border-top: 1px solid #222; margin-top: 20px; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <div class="top-bar">
+        <div class="logo"><i class="fas fa-globe"></i> مرجع العراق – آخر أخبار العالم</div>
+        <div class="update-info"><span class="live-dot">●</span> تحديث كل 30 ثانية | <span id="lastUpdate">قريباً</span></div>
+    </div>
+    <div class="breaking-news" id="breakingNews"><i class="fas fa-exclamation-circle"></i> <span id="breakingText"></span></div>
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="ابحث في جميع الأخبار..." oninput="searchNews()">
+        <button onclick="searchNews()"><i class="fas fa-search"></i> بحث</button>
+        <button style="background:#e74c3c; color:#fff;" onclick="fetchTrends()"><i class="fas fa-fire"></i> الترند</button>
+        <button style="background:#2196F3; color:#fff;" id="forceUpdateBtn" onclick="forceUpdate()"><i class="fas fa-sync-alt"></i> تحديث الأخبار</button>
+    </div>
+    <div id="updateMessage" class="update-message"></div>
+    <main class="news-grid" id="newsContainer"></main>
+    <div class="loading" id="loadingSpinner"><i class="fas fa-spinner fa-spin fa-2x"></i><p>جاري جلب أحدث أخبار العالم...</p></div>
+    <footer>جميع الحقوق محفوظة © 2026 مرجع العراق – المرجع الأول للأسعار والعروض في العراق</footer>
+
+    <script>
+        // ================== قائمة المصادر (بدون إسرائيل) ==================
+        const NEWS_SOURCES = [
+            // --- العراق (IQ) ---
+            { url: "https://www.ina.iq/rss_feed.xml", lang: "ar", country: "iq" },
+            { url: "https://www.alsumaria.tv/Rss", lang: "ar", country: "iq" },
+            { url: "https://www.shafaq.com/ar/rss", lang: "ar", country: "iq" },
+            { url: "https://www.rudaw.net/rss", lang: "ar", country: "iq" },
+            { url: "https://baghdadtoday.news/rss.xml", lang: "ar", country: "iq" },
+            { url: "https://alghadpress.com/feed/", lang: "ar", country: "iq" },
+            { url: "https://www.ipa.com.iq/feed/", lang: "ar", country: "iq" },
+            { url: "https://alforatnews.iq/feed", lang: "ar", country: "iq" },
+            { url: "https://www.alsabaah.iq/rss.xml", lang: "ar", country: "iq" },
+            { url: "https://www.nahrain.com/feed", lang: "ar", country: "iq" },
+            { url: "https://www.al-mirbad.com/rss", lang: "ar", country: "iq" },
+            { url: "https://www.nasnews.com/feed", lang: "ar", country: "iq" },
+            { url: "https://www.mawazin.net/feed", lang: "ar", country: "iq" },
+            { url: "https://www.ultrairaq.com/rss", lang: "ar", country: "iq" },
+            { url: "https://www.iraqakhbar.com/feed", lang: "ar", country: "iq" },
+            { url: "https://kirkuknow.com/ar/rss", lang: "ar", country: "iq" },
+            { url: "https://www.pukmedia.com/AR/Rss", lang: "ar", country: "iq" },
+            { url: "https://www.basnews.com/ar/rss", lang: "ar", country: "iq" },
+            { url: "https://www.zamanalwsl.net/rss", lang: "ar", country: "iq" },
+            { url: "https://www.alkawthartv.com/rss", lang: "ar", country: "iq" },
+            { url: "https://www.alahednews.com.lb/rss", lang: "ar", country: "iq" },
+            { url: "https://www.aletihad.ae/rss", lang: "ar", country: "iq" },
+
+            // --- السعودية (SA) ---
+            { url: "https://www.alwatan.com.sa/rss", lang: "ar", country: "sa" },
+            { url: "https://www.okaz.com.sa/rss", lang: "ar", country: "sa" },
+            { url: "https://www.alriyadh.com/rss", lang: "ar", country: "sa" },
+            { url: "https://www.alyaum.com/rss", lang: "ar", country: "sa" },
+            { url: "https://aawsat.com/rss", lang: "ar", country: "sa" },
+            { url: "https://www.al-madina.com/rss", lang: "ar", country: "sa" },
+            { url: "https://www.spa.gov.sa/rss", lang: "ar", country: "sa" },
+            { url: "https://www.alarabiya.net/.mrss", lang: "ar", country: "sa" },
+            { url: "https://www.al-jazirah.com/rss", lang: "ar", country: "sa" },
+            { url: "https://www.alweeam.com.sa/feed", lang: "ar", country: "sa" },
+            { url: "https://www.sabaqonline.com/feed", lang: "ar", country: "sa" },
+            { url: "https://www.almowaten.net/feed", lang: "ar", country: "sa" },
+            { url: "https://www.ajel.sa/rss", lang: "ar", country: "sa" },
+            { url: "https://www.al-marsd.com/feed", lang: "ar", country: "sa" },
+            { url: "https://www.maaal.com/feed", lang: "ar", country: "sa" },
+            { url: "https://www.aleqt.com/rss", lang: "ar", country: "sa" },
+
+            // --- الإمارات (AE) ---
+            { url: "https://www.albayan.ae/rss", lang: "ar", country: "ae" },
+            { url: "https://www.emaratalyoum.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.alittihad.ae/rss", lang: "ar", country: "ae" },
+            { url: "https://www.alkhaleej.ae/rss", lang: "ar", country: "ae" },
+            { url: "https://www.skynewsarabia.com/rss.xml", lang: "ar", country: "ae" },
+            { url: "https://www.thenationalnews.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.emirates247.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.gulfnews.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.khaleejtimes.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.arabianbusiness.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.uae24x7.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.arabianpost.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.dubaichronicle.com/rss", lang: "ar", country: "ae" },
+            { url: "https://www.emiratesvoice.com/rss", lang: "ar", country: "ae" },
+
+            // --- قطر (QA) ---
+            { url: "https://www.aljazeera.net/xml/rss/", lang: "ar", country: "qa" },
+            { url: "https://www.raya.com/rss", lang: "ar", country: "qa" },
+            { url: "https://www.al-sharq.com/rss", lang: "ar", country: "qa" },
+            { url: "https://www.al-watan.com/rss", lang: "ar", country: "qa" },
+            { url: "https://www.qna.org.qa/rss", lang: "ar", country: "qa" },
+            { url: "https://www.dohanews.co/rss", lang: "ar", country: "qa" },
+            { url: "https://www.thepeninsulaqatar.com/rss", lang: "ar", country: "qa" },
+            { url: "https://www.iloveqatar.net/rss", lang: "ar", country: "qa" },
+            { url: "https://www.qatar-tribune.com/rss", lang: "ar", country: "qa" },
+            { url: "https://www.al-jazeera.com/xml/rss/all.xml", lang: "ar", country: "qa" },
+
+            // --- مصر (EG) ---
+            { url: "https://www.almasryalyoum.com/rss/rssfeed", lang: "ar", country: "eg" },
+            { url: "https://www.youm7.com/rss", lang: "ar", country: "eg" },
+            { url: "https://www.shorouknews.com/rss", lang: "ar", country: "eg" },
+            { url: "https://gate.ahram.org.eg/rss", lang: "ar", country: "eg" },
+            { url: "https://www.elwatannews.com/rss", lang: "ar", country: "eg" },
+            { url: "https://www.egyptindependent.com/rss", lang: "ar", country: "eg" },
+            { url: "https://www.dostor.org/rss", lang: "ar", country: "eg" },
+            { url: "https://www.vetogate.com/rss", lang: "ar", country: "eg" },
+            { url: "https://www.albawabhnews.com/rss", lang: "ar", country: "eg" },
+            { url: "https://www.elfagr.org/rss", lang: "ar", country: "eg" },
+            { url: "https://www.maspero.eg/rss", lang: "ar", country: "eg" },
+            { url: "https://www.sis.gov.eg/rss", lang: "ar", country: "eg" },
+            { url: "https://www.mena.org.eg/rss", lang: "ar", country: "eg" },
+            { url: "https://www.egynews.net/feed", lang: "ar", country: "eg" },
+            { url: "https://www.mobtada.com/rss", lang: "ar", country: "eg" },
+
+            // --- الكويت (KW) ---
+            { url: "https://www.aljarida.com/rss", lang: "ar", country: "kw" },
+            { url: "https://www.alqabas.com/rss", lang: "ar", country: "kw" },
+            { url: "https://www.alanba.com.kw/rss", lang: "ar", country: "kw" },
+            { url: "https://www.alraimedia.com/rss", lang: "ar", country: "kw" },
+            { url: "https://www.alwasat.com.kw/rss", lang: "ar", country: "kw" },
+            { url: "https://www.arabtimesonline.com/rss", lang: "ar", country: "kw" },
+            { url: "https://www.timeskuwait.com/rss", lang: "ar", country: "kw" },
+            { url: "https://www.kuwaitnews.net/rss", lang: "ar", country: "kw" },
+
+            // --- البحرين (BH) ---
+            { url: "https://www.alayam.com/rss", lang: "ar", country: "bh" },
+            { url: "https://www.akhbar-alkhaleej.com/rss", lang: "ar", country: "bh" },
+            { url: "https://www.albiladpress.com/rss", lang: "ar", country: "bh" },
+            { url: "https://www.bna.bh/rss", lang: "ar", country: "bh" },
+            { url: "https://www.alwatannews.net/rss", lang: "ar", country: "bh" },
+
+            // --- عُمان (OM) ---
+            { url: "https://www.omandaily.om/feed", lang: "ar", country: "om" },
+            { url: "https://www.shabiba.com/feed", lang: "ar", country: "om" },
+            { url: "https://www.alroya.om/rss", lang: "ar", country: "om" },
+            { url: "https://www.omannews.gov.om/rss", lang: "ar", country: "om" },
+            { url: "https://www.muscatdaily.com/rss", lang: "ar", country: "om" },
+            { url: "https://www.omantoday.net/rss", lang: "ar", country: "om" },
+
+            // --- الأردن (JO) ---
+            { url: "https://www.alghad.com/rss", lang: "ar", country: "jo" },
+            { url: "https://www.addustour.com/rss", lang: "ar", country: "jo" },
+            { url: "https://www.alrai.com/rss", lang: "ar", country: "jo" },
+            { url: "https://www.ammonnews.net/rss", lang: "ar", country: "jo" },
+            { url: "https://www.sarayanews.com/rss", lang: "ar", country: "jo" },
+            { url: "https://www.jordanzad.com/rss", lang: "ar", country: "jo" },
+            { url: "https://www.gerasanews.com/rss", lang: "ar", country: "jo" },
+            { url: "https://www.khaberni.com/rss", lang: "ar", country: "jo" },
+            { url: "https://www.petra.gov.jo/rss", lang: "ar", country: "jo" },
+
+            // --- لبنان (LB) ---
+            { url: "https://www.annahar.com/rss", lang: "ar", country: "lb" },
+            { url: "https://www.al-akhbar.com/rss", lang: "ar", country: "lb" },
+            { url: "https://www.almanar.com.lb/rss", lang: "ar", country: "lb" },
+            { url: "https://www.nna-leb.gov.lb/rss", lang: "ar", country: "lb" },
+            { url: "https://www.lbcgroup.tv/rss", lang: "ar", country: "lb" },
+            { url: "https://www.otv.com.lb/rss", lang: "ar", country: "lb" },
+            { url: "https://www.mtv.com.lb/rss", lang: "ar", country: "lb" },
+            { url: "https://www.aljadeed.tv/rss", lang: "ar", country: "lb" },
+            { url: "https://www.lebanon24.com/rss", lang: "ar", country: "lb" },
+            { url: "https://www.almarkazia.com.lb/rss", lang: "ar", country: "lb" },
+
+            // --- فلسطين (PS) ---
+            { url: "https://www.alquds.com/feed", lang: "ar", country: "ps" },
+            { url: "https://www.maannews.net/rss", lang: "ar", country: "ps" },
+            { url: "https://www.paltoday.ps/ar/rss", lang: "ar", country: "ps" },
+            { url: "https://www.wattan.net/rss", lang: "ar", country: "ps" },
+            { url: "https://www.pnn.ps/rss", lang: "ar", country: "ps" },
+
+            // --- سوريا (SY) ---
+            { url: "https://www.sana.sy/feed", lang: "ar", country: "sy" },
+            { url: "https://www.zamanalwsl.net/rss", lang: "ar", country: "sy" },
+            { url: "https://www.syriahr.com/feed", lang: "ar", country: "sy" },
+            { url: "https://www.enabbaladi.net/feed", lang: "ar", country: "sy" },
+            { url: "https://www.aksalser.com/rss", lang: "ar", country: "sy" },
+            { url: "https://www.syria.news/rss", lang: "ar", country: "sy" },
+            { url: "https://www.syrianobserver.com/rss", lang: "ar", country: "sy" },
+            { url: "https://www.alwatan.sy/rss", lang: "ar", country: "sy" },
+            { url: "https://www.halabtodaytv.net/rss", lang: "ar", country: "sy" },
+
+            // --- اليمن (YE) ---
+            { url: "https://www.26sep.net/rss.xml", lang: "ar", country: "ye" },
+            { url: "https://www.almasdaronline.com/rss", lang: "ar", country: "ye" },
+            { url: "https://www.yementdy.com/rss", lang: "ar", country: "ye" },
+            { url: "https://www.almahriah.net/rss", lang: "ar", country: "ye" },
+            { url: "https://www.yemen-media.info/rss", lang: "ar", country: "ye" },
+
+            // --- ليبيا (LY) ---
+            { url: "https://www.libya-akhbar.com/feed", lang: "ar", country: "ly" },
+            { url: "https://www.libya24.tv/rss", lang: "ar", country: "ly" },
+            { url: "https://www.alwasat.ly/rss", lang: "ar", country: "ly" },
+            { url: "https://www.lana.gov.ly/rss", lang: "ar", country: "ly" },
+            { url: "https://www.libya-al-mostakbal.org/rss", lang: "ar", country: "ly" },
+
+            // --- تونس (TN) ---
+            { url: "https://www.mosaiquefm.net/ar/rss", lang: "ar", country: "tn" },
+            { url: "https://www.assabah.com.tn/rss", lang: "ar", country: "tn" },
+            { url: "https://www.nessma.tv/rss", lang: "ar", country: "tn" },
+            { url: "https://www.tunisnow.tn/rss", lang: "ar", country: "tn" },
+            { url: "https://www.tunisienumerique.com/rss", lang: "ar", country: "tn" },
+
+            // --- الجزائر (DZ) ---
+            { url: "https://www.elkhabar.com/rss", lang: "ar", country: "dz" },
+            { url: "https://www.echoroukonline.com/rss", lang: "ar", country: "dz" },
+            { url: "https://www.ennaharonline.com/rss", lang: "ar", country: "dz" },
+            { url: "https://www.algeriatimes.net/rss", lang: "ar", country: "dz" },
+            { url: "https://www.entv.dz/rss", lang: "ar", country: "dz" },
+
+            // --- المغرب (MA) ---
+            { url: "https://www.hespress.com/rss", lang: "ar", country: "ma" },
+            { url: "https://www.assabah.ma/rss", lang: "ar", country: "ma" },
+            { url: "https://www.ladepeche.ma/rss", lang: "ar", country: "ma" },
+            { url: "https://www.telegraphe.ma/rss", lang: "ar", country: "ma" },
+            { url: "https://www.medi1tv.com/rss", lang: "ar", country: "ma" },
+
+            // --- السودان (SD) ---
+            { url: "https://www.sudantribune.com/rss", lang: "ar", country: "sd" },
+            { url: "https://www.alsudani.sd/rss", lang: "ar", country: "sd" },
+            { url: "https://www.altaghyeer.info/rss", lang: "ar", country: "sd" },
+            { url: "https://www.dabangasudan.org/rss", lang: "ar", country: "sd" },
+            { url: "https://www.sudanpress.com/rss", lang: "ar", country: "sd" },
+
+            // --- آسيا والمحيط الهادئ ---
+            { url: "https://www.japantimes.co.jp/rss", lang: "en", country: "jp" },
+            { url: "https://www.chinadaily.com.cn/rss", lang: "en", country: "cn" },
+            { url: "https://www.koreatimes.co.kr/rss", lang: "en", country: "kr" },
+            { url: "https://www.straitstimes.com/rss", lang: "en", country: "sg" },
+            { url: "https://www.thehindu.com/rss", lang: "en", country: "in" },
+            { url: "https://timesofindia.indiatimes.com/rssfeedstopstories.cms", lang: "en", country: "in" },
+            { url: "https://www.dawn.com/rss", lang: "en", country: "pk" },
+            { url: "https://www.tolonews.com/rss", lang: "en", country: "af" },
+            { url: "https://www.nationmultimedia.com/rss", lang: "en", country: "th" },
+            { url: "https://www.thestar.com.my/rss", lang: "en", country: "my" },
+
+            // --- أوروبا ---
+            { url: "https://www.bbc.com/rss", lang: "en", country: "uk" },
+            { url: "https://www.theguardian.com/world/rss", lang: "en", country: "uk" },
+            { url: "https://www.france24.com/en/rss", lang: "en", country: "fr" },
+            { url: "https://rss.dw.com/rdf/rss-en-world", lang: "en", country: "de" },
+            { url: "https://www.spiegel.de/international/rss", lang: "en", country: "de" },
+            { url: "https://www.lemonde.fr/rss/une.xml", lang: "fr", country: "fr" },
+            { url: "https://www.ansa.it/rss", lang: "en", country: "it" },
+            { url: "https://www.euractiv.com/rss", lang: "en", country: "eu" },
+            { url: "https://www.thelocal.fr/rss", lang: "en", country: "fr" },
+            { url: "https://www.thelocal.de/rss", lang: "en", country: "de" },
+            { url: "https://www.thelocal.it/rss", lang: "en", country: "it" },
+            { url: "https://www.thelocal.es/rss", lang: "en", country: "es" },
+            { url: "https://www.thelocal.se/rss", lang: "en", country: "se" },
+            { url: "https://www.thelocal.no/rss", lang: "en", country: "no" },
+            { url: "https://www.thelocal.dk/rss", lang: "en", country: "dk" },
+            { url: "https://www.thelocal.at/rss", lang: "en", country: "at" },
+            { url: "https://www.thelocal.ch/rss", lang: "en", country: "ch" },
+            { url: "https://www.thelocal.nl/rss", lang: "en", country: "nl" },
+            { url: "https://www.thelocal.be/rss", lang: "en", country: "be" },
+            { url: "https://www.thelocal.pl/rss", lang: "en", country: "pl" },
+
+            // --- الأمريكتان ---
+            { url: "http://rss.cnn.com/rss/edition_world.rss", lang: "en", country: "us" },
+            { url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", lang: "en", country: "us" },
+            { url: "https://www.reutersagency.com/feed/", lang: "en", country: "us" },
+            { url: "https://www.apnews.com/rss", lang: "en", country: "us" },
+            { url: "https://www.washingtonpost.com/rss", lang: "en", country: "us" },
+            { url: "https://www.cbc.ca/cmlink/rss-world", lang: "en", country: "ca" },
+            { url: "https://www.bbc.com/portuguese/rss.xml", lang: "pt", country: "br" },
+            { url: "https://www.theglobeandmail.com/rss", lang: "en", country: "ca" },
+            { url: "https://www.latimes.com/rss", lang: "en", country: "us" },
+            { url: "https://www.newsweek.com/rss", lang: "en", country: "us" },
+            { url: "https://www.usatoday.com/rss", lang: "en", country: "us" },
+            { url: "https://www.wsj.com/rss", lang: "en", country: "us" },
+            { url: "https://www.bloomberg.com/rss", lang: "en", country: "us" },
+            { url: "https://www.ft.com/rss", lang: "en", country: "uk" },
+            { url: "https://www.economist.com/rss", lang: "en", country: "uk" },
+            { url: "https://www.nationalpost.com/rss", lang: "en", country: "ca" },
+            { url: "https://www.thestar.com/rss", lang: "en", country: "ca" },
+            { url: "https://www.abc.net.au/rss", lang: "en", country: "au" },
+            { url: "https://www.smh.com.au/rss", lang: "en", country: "au" },
+            { url: "https://www.nzherald.co.nz/rss", lang: "en", country: "nz" },
+
+            // --- أفريقيا ---
+            { url: "https://www.africanews.com/rss", lang: "en", country: "af" },
+            { url: "https://www.nation.africa/rss", lang: "en", country: "ke" },
+            { url: "https://www.punchng.com/feed", lang: "en", country: "ng" },
+            { url: "https://www.standardmedia.co.ke/rss", lang: "en", country: "ke" },
+            { url: "https://www.iol.co.za/rss", lang: "en", country: "za" },
+            { url: "https://www.news24.com/rss", lang: "en", country: "za" },
+            { url: "https://www.herald.co.zw/rss", lang: "en", country: "zw" },
+            { url: "https://www.monitor.co.ug/rss", lang: "en", country: "ug" },
+            { url: "https://www.theeastafrican.co.ke/rss", lang: "en", country: "ke" },
+            { url: "https://www.busiweek.com/rss", lang: "en", country: "ug" },
+
+            // --- إيران وتركيا (بدون إسرائيل) ---
+            { url: "https://www.irna.ir/rss", lang: "ar", country: "ir" },
+            { url: "https://www.presstv.com/rss", lang: "en", country: "ir" },
+            { url: "https://www.dailysabah.com/rss", lang: "en", country: "tr" },
+            { url: "https://www.hurriyetdailynews.com/rss", lang: "en", country: "tr" },
+        ];
+
+        const CORS_PROXY = 'https://corsproxy.io/?url=';
+        let allNews = [];
+        let displayedLinks = new Set();
+        let searchQuery = '';
+
+        // ================== ترجمة مجانية ==================
+        async function translateToArabic(text, lang = 'auto') {
+            if (!text || !text.trim() || lang === 'ar') return text;
+            try {
+                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${lang}&tl=ar&dt=t&q=${encodeURIComponent(text)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                let r = '';
+                if (data && data[0]) data[0].forEach(p => { if (p[0]) r += p[0]; });
+                return r || text;
+            } catch (e) { return text; }
+        }
+
+        // ================== تحليل RSS ==================
+        function parseRSS(xmlText) {
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(xmlText, "text/xml");
+            const items = xml.querySelectorAll("item");
+            return Array.from(items).map(item => ({
+                title: item.querySelector("title")?.textContent?.trim() || "",
+                link: item.querySelector("link")?.textContent?.trim() || "",
+                description: item.querySelector("description")?.textContent?.trim() || "",
+                pubDate: item.querySelector("pubDate")?.textContent?.trim() || new Date().toISOString(),
+                image: item.querySelector("enclosure")?.getAttribute("url") || null
+            }));
+        }
+
+        // ================== جلب مصدر واحد ==================
+        async function fetchSingleSource(source) {
+            try {
+                const url = CORS_PROXY + encodeURIComponent(source.url);
+                const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+                if (!res.ok) return [];
+                const xml = await res.text();
+                let items = parseRSS(xml);
+                if (source.lang !== 'ar') {
+                    items = await Promise.all(items.map(async (item) => {
+                        item.title = await translateToArabic(item.title, source.lang);
+                        if (item.description) item.description = await translateToArabic(item.description, source.lang);
+                        return item;
+                    }));
+                }
+                return items;
+            } catch (e) { return []; }
+        }
+
+        // ================== جلب كل المصادر ==================
+        async function fetchAllSources(showLoader = true) {
+            if (showLoader) document.getElementById('loadingSpinner').style.display = 'block';
+            const chunkSize = 10;
+            let fresh = [];
+            for (let i = 0; i < NEWS_SOURCES.length; i += chunkSize) {
+                const chunk = NEWS_SOURCES.slice(i, i + chunkSize);
+                const results = await Promise.all(chunk.map(s => fetchSingleSource(s)));
+                fresh.push(...results.flat());
+            }
+
+            const newItems = fresh.filter(item => !displayedLinks.has(item.link));
+            const msg = document.getElementById('updateMessage');
+            if (newItems.length > 0) {
+                newItems.forEach(item => displayedLinks.add(item.link));
+                allNews = [...newItems, ...allNews].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+                appendCards(newItems);
+                msg.textContent = `✓ تمت إضافة ${newItems.length} أخبار جديدة`;
+                msg.style.color = '#4ade80';
+            } else {
+                msg.textContent = '⏳ لم يتم العثور على أخبار جديدة';
+                msg.style.color = '#aaa';
+            }
+            msg.style.display = 'block';
+            setTimeout(() => msg.style.display = 'none', 4000);
+
+            if (allNews.length > 0) {
+                document.getElementById('breakingNews').style.display = 'flex';
+                document.getElementById('breakingText').textContent = allNews[0].title;
+            }
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('ar-IQ');
+            if (showLoader) document.getElementById('loadingSpinner').style.display = 'none';
+        }
+
+        // ================== عرض البطاقات ==================
+        function createCard(item) {
+            const card = document.createElement('div');
+            card.className = 'news-card';
+            card.innerHTML = `
+                ${item.image ? `<img src="${item.image}" class="card-img" onerror="this.style.display='none'">` : ''}
+                <div class="card-body">
+                    <span class="source-badge">مرجع العراق</span>
+                    <h3 class="card-title">${item.title}</h3>
+                    <p class="card-desc">${(item.description || '').replace(/<[^>]*>/g, '').substring(0, 100)}...</p>
+                    <div class="card-footer">
+                        <span><i class="far fa-clock"></i> ${new Date(item.pubDate).toLocaleDateString('ar-IQ')}</span>
+                    </div>
+                </div>
+            `;
+            return card;
+        }
+
+        function appendCards(newItems) {
+            const container = document.getElementById('newsContainer');
+            if (searchQuery) { rebuildGrid(); return; }
+            newItems.slice().reverse().forEach(item => container.prepend(createCard(item)));
+            while (container.children.length > 50) container.lastChild.remove();
+        }
+
+        function rebuildGrid() {
+            const container = document.getElementById('newsContainer');
+            container.innerHTML = '';
+            let filtered = allNews.filter(n => !searchQuery || n.title.includes(searchQuery));
+            filtered.slice(0, 50).forEach(item => container.appendChild(createCard(item)));
+        }
+
+        function searchNews() {
+            searchQuery = document.getElementById('searchInput').value.trim();
+            rebuildGrid();
+        }
+
+        // ================== زر التحديث الفوري (محسّن) ==================
+        async function forceUpdate() {
+            const btn = document.getElementById('forceUpdateBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحديث...';
+            await fetchAllSources(true);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync-alt"></i> تحديث الأخبار';
+        }
+
+        // ================== ترند Google ==================
+        async function fetchTrends() {
+            try {
+                const url = CORS_PROXY + 'https://trends.google.com/trending/rss?geo=IQ';
+                const res = await fetch(url);
+                const xml = await res.text();
+                let items = parseRSS(xml);
+                items = await Promise.all(items.map(async (item) => {
+                    item.title = '🔥 ' + await translateToArabic(item.title, 'en');
+                    return item;
+                }));
+                const newItems = items.filter(item => !displayedLinks.has(item.link));
+                if (newItems.length > 0) {
+                    newItems.forEach(item => displayedLinks.add(item.link));
+                    allNews = [...newItems, ...allNews];
+                    appendCards(newItems);
+                }
+            } catch (e) { alert('تعذر جلب الترندات'); }
+        }
+
+        function startAutoUpdate() {
+            setInterval(async () => { await fetchAllSources(false); }, 30000);
+        }
+
+        window.onload = async () => {
+            await fetchAllSources(true);
+            rebuildGrid();
+            startAutoUpdate();
+        };
+        document.addEventListener('copy', e => e.preventDefault());
+        document.addEventListener('keydown', e => { if (e.ctrlKey && (e.key === 'u' || e.key === 's')) e.preventDefault(); });
+    </script>
+</body>
+</html>
